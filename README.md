@@ -4,7 +4,7 @@ A tiny offline-first weight log that runs as an installable web app (PWA) on And
 
 - All data is stored **on the device** (browser storage). Nothing is sent anywhere.
 - Works offline after the first visit.
-- Export/import as CSV for backup.
+- Export/import as CSV for backup: copy to clipboard, paste back in, or import a file.
 
 ## Install on Android
 1. Open the GitHub Pages URL in Firefox or Chrome.

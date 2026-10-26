@@ -105,6 +105,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .del.armed { background: var(--up); color: var(--surface); }
 .empty { color: var(--muted); font-size: 0.9rem; margin: 4px 0; }
 .btn-ghost { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; }
+.paste { display: flex; flex-direction: column; gap: 8px; padding-bottom: 6px; }
+#pasteBox { width: 100%; min-height: 140px; font-family: var(--font-display); font-size: 0.8rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical; }
 #csvbox { width: 100%; min-height: 120px; font-family: var(--font-display); font-size: 0.75rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 @media (max-width: 380px) { .stats { gap: 6px; } .stat .v { font-size: 1rem; } }
 @media (prefers-reduced-motion: no-preference) { .btn-primary { transition: opacity .15s; } }
@@ -153,10 +155,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     <div class="panel-head">
       <span class="label">History</span>
       <div class="row">
-        <label class="btn-ghost" for="importFile" style="cursor:pointer">Import CSV</label>
+        <button type="button" class="btn-ghost" id="pasteBtn" aria-expanded="false" aria-controls="pastePanel">Paste CSV</button>
+        <label class="btn-ghost" for="importFile" style="cursor:pointer">Import file</label>
         <input type="file" id="importFile" accept=".csv,text/csv,text/plain" hidden>
         <button type="button" class="btn-ghost" id="csv">Copy as CSV</button>
       </div>
+    </div>
+    <div class="paste" id="pastePanel" hidden>
+      <label class="label" for="pasteBox">Paste weigh-ins, one per line</label>
+      <textarea id="pasteBox" placeholder="2026-10-25,78.6&#10;2026-10-26,78.4" spellcheck="false"></textarea>
+      <div class="row">
+        <button type="button" class="btn-primary" id="pasteImport">Import</button>
+        <button type="button" class="btn-ghost" id="pasteCancel">Cancel</button>
+      </div>
+      <p class="msg" id="pasteMsg" aria-live="polite">Format: date,kg. Comma decimals and a header line are fine. Same date overwrites.</p>
     </div>
     <textarea id="csvbox" hidden readonly aria-label="CSV data"></textarea>
     <ul class="log" id="log"></ul>
@@ -223,19 +235,43 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   async function removeEntry(date) { dropRecord(date); saveLocal(); render(); }
 
-  // ---------- CSV import ----------
+  // ---------- CSV import (file or paste) ----------
+  // Accepts "YYYY-MM-DD,78.4", "YYYY-MM-DD;78,4", tab-separated, quoted values; skips headers/junk.
+  function importText(text) {
+    let n = 0, skipped = 0;
+    text.split(/\r?\n/).forEach((line) => {
+      const t = line.trim(); if (!t) return;
+      const m = t.match(/^"?(\d{4}-\d{2}-\d{2})"?\s*[,;\t]\s*"?(\d+(?:[.,]\d+)?)"?/);
+      if (!m) { skipped++; return; }
+      const kg = parseFloat(m[2].replace(",", "."));
+      if (kg >= 20 && kg <= 400) { putRecord(m[1], Math.round(kg * 10) / 10); n++; } else skipped++;
+    });
+    if (n && !saveLocal()) return { n: 0, skipped, failed: true };
+    render();
+    return { n, skipped };
+  }
+  function importSummary(r) {
+    if (r.failed) return "Couldn't save: this browser blocks storage.";
+    if (!r.n) return "No rows found. Use lines like 2026-10-26,78.4";
+    return `Imported ${r.n} weigh-in${r.n === 1 ? "" : "s"}` + (r.skipped > 1 ? `, skipped ${r.skipped} lines.` : r.skipped === 1 ? ", skipped 1 line." : ".");
+  }
   $("importFile").addEventListener("change", async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
-    const text = await f.text();
-    let n = 0;
-    text.split(/\r?\n/).forEach((line) => {
-      const m = line.trim().match(/^(\d{4}-\d{2}-\d{2})[,;\t]\s*"?(\d+(?:[.,]\d+)?)"?/);
-      if (m) { const kg = parseFloat(m[2].replace(",", ".")); if (kg >= 20 && kg <= 400) { putRecord(m[1], Math.round(kg * 10) / 10); n++; } }
-    });
-    const msg = $("msg"); msg.classList.remove("err");
-    if (n && saveLocal()) msg.textContent = `Imported ${n} weigh-in${n === 1 ? "" : "s"}.`;
-    else { msg.textContent = "No rows found. Use lines like 2026-10-26,78.4"; msg.classList.add("err"); }
-    e.target.value = ""; render();
+    const r = importText(await f.text());
+    const msg = $("msg"); msg.textContent = importSummary(r); msg.classList.toggle("err", !r.n);
+    e.target.value = "";
+  });
+  function togglePaste(open) {
+    $("pastePanel").hidden = !open;
+    $("pasteBtn").setAttribute("aria-expanded", String(open));
+    if (open) { $("pasteMsg").classList.remove("err"); $("pasteBox").focus(); }
+  }
+  $("pasteBtn").addEventListener("click", () => togglePaste($("pastePanel").hidden));
+  $("pasteCancel").addEventListener("click", () => { $("pasteBox").value = ""; togglePaste(false); });
+  $("pasteImport").addEventListener("click", () => {
+    const r = importText($("pasteBox").value);
+    const pm = $("pasteMsg"); pm.textContent = importSummary(r); pm.classList.toggle("err", !r.n);
+    if (r.n) $("pasteBox").value = "";
   });
 
   // ---------- form ----------
