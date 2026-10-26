@@ -190,7 +190,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   let entries = new Map();   // "YYYY-MM-DD" -> kg
   let readOnly = false;
   let rangeDays = 90;
-  try { const r = localStorage.getItem("wl-range"); if (r !== null) rangeDays = Number(r); } catch (e) {}
+  const RANGE_KEY = "weighin.chartRange";
+  try {
+    let r = localStorage.getItem(RANGE_KEY);
+    const legacy = localStorage.getItem("wl-range");          // migrate old key name
+    if (legacy !== null) { if (r === null) { r = legacy; localStorage.setItem(RANGE_KEY, legacy); } localStorage.removeItem("wl-range"); }
+    if (r !== null && [0, 30, 90, 365].includes(Number(r))) rangeDays = Number(r);
+  } catch (e) {}
 
   $("date").value = iso(new Date());
   $("date").max = iso(new Date());
@@ -303,7 +309,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   $("range").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-days]"); if (!b) return;
     rangeDays = Number(b.dataset.days);
-    try { localStorage.setItem("wl-range", String(rangeDays)); } catch (er) {}
+    try { localStorage.setItem(RANGE_KEY, String(rangeDays)); } catch (er) {}
     render();
   });
 

@@ -1,5 +1,5 @@
 // Offline cache for Weigh-in Log. Bump VERSION when you change any file.
-const VERSION = "weighin-v2";
+const VERSION = "weighin-v3";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
